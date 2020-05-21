@@ -1,0 +1,92 @@
+
+* Installation Guide
+** Partition Layout
+| Partition                | Disk      | Size      | Type  | Flags         | Mount Point |
+| __________               | _____     | _________ | _____ | ___________   | ___________ |
+| MBR                      | flash1    | bios_boot | vfat  | esp,bios_grub |             |
+| /dev/mapper/bootpt       | flash2    | 300mb     | ext2  | BOOT          | /boot       |
+| /dev/mapper/linuxvg-swap | /dev/sda1 | 2G        | swap  | lvm           | swap        |
+| /dev/mapper/linuxvg-root | /dev/sda2 | Rest      | ext4  | lvm           | /           |
+| tmpfs                    | tmpfs     |           |       |               |             |
+  
+** Create the partitions
+   sda flash disk
+   sdb main disk
+   
+   parted -a optimal /dev/sda
+   mklabel gpt
+   unit mib
+   mkpart primary 1 10
+   name 1 bios_grub
+   set 1 bios_grub
+   mkpart primary 10 -1
+   name 1 boot
+   set 2 BOOT on
+
+   parted -a optimal /dev/sdb
+   mklabel gpt
+   unit mib
+   mkpart primary 1 -1
+   name 1 rootfs
+   set 1 lvm on
+
+** Encrypt    
+   cryptsetup -v -y -c aes-xts-plain64 -s 512 -h sha512 -i 5000 --use-random --type luks1 luksFormat /dev/sda2
+   cryptsetup -v -y -c aes-xts-plain64 -s 512 -h sha512 -i 5000 --use-random luksFormat /dev/sdb1
+** LVM Creation
+   cryptsetup luksOpen /dev/sda2 bootpt
+   cryptsetup luksOpen /dev/sdb1 linuxlv
+   pvcreate /dev/mapper/linuxlv
+   vgcreate linuxvg /dev/mapper/linuxlv
+   lvcreate -C y -L 1G linuxvg -n swap
+   lvcrete -l +100%FREE linuxvg -n root
+   vgscan
+   vgchange -ay
+** FileSys Creation
+   mkfs.vfat /dev/sda1
+   mkfs.ext2 -T small /dev/sda2
+   mkswap /dev/mapper/linuxvg-swap
+   swapon /dev/mapper/linuxvg-swap
+   free -m
+   mkfs.ext4 /dev/mapper/linuxvg-root
+
+
+
+** Mount partitions
+   mount /dev/mapper/linuxvg-root /mnt/gentoo
+   mkdir /mnt/gentoo/boot
+   mount /dev/mapper/bootpt /mnt/gentoo/boot
+** Stage3 setup
+** USE Flags
+** Kernel config
+   make -j5 && make -j5 modules_install;  make -j5 install
+   sda flash
+   sdb main disk
+ 
+** InitramFS
+   genkernel --lvm --luks --install initramfs
+** Bootloader
+   sys-boot/grub mount device-mapper
+   grub-install --modules="linux crypto searh_fs_uuid luks lvm" --recheck /dev/sdX 
+   grub-mkconfig -o /boot/grub/grub.cfg
+* POST INSTALL
+** User add
+** Portage on TMPFS
+** Portage Config
+** SELinux
+** Portage utils
+   equery,genlop,gentoolkit,flaggie
+   eix-installed, genltop,gentoolkit,equery,flaggie
+   layman -> git svn mercurial
+** Sys utils
+   pcmanfm
+   neofetch
+   gnome-system-monitor
+   firejails
+* Desktop setup
+** Xorg
+** Awesomewm
+** Audio
+** Internet
+** Skype,Viber
+** Sandboxing Firefox,Chrome
